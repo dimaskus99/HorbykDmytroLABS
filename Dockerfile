@@ -1,11 +1,10 @@
-FROM python:3.11.3-slim-bullseye
+FROM python:3.9-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-RUN python -m pip install -r requirements.txt
+COPY . .
 
-COPY . /app
-
-CMD flask --app app run -h 0.0.0.0 -p $PORT 
+CMD ["flask", "--app", "app", "run", "-h", "0.0.0.0", "-p", "5000"]
