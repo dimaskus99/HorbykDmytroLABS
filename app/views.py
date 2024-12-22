@@ -1,29 +1,49 @@
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from app import db
 from app.models import User, Category, Record, Currency
 from app.schemas import UserSchema, CategorySchema, RecordSchema, CurrencySchema
 from .utils import handle_error
+from passlib.hash import pbkdf2_sha256
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
-@api_bp.route('/user', methods=['POST'])
-def create_user():
+@api_bp.route('/register', methods=['POST'])
+def register():
     try:
         data = request.json
-        errors = UserSchema().validate(data)
-        if errors:
-            return jsonify(errors), 400
+        if User.query.filter_by(name=data['name']).first():
+            return jsonify({"message": "User with this name already exists"}), 400
 
-        # Створення нового користувача
-        user = User(name=data['name'])
-        db.session.add(user)
+        hashed_password = pbkdf2_sha256.hash(data['password'])
+        new_user = User(name=data['name'], password=hashed_password)
+        db.session.add(new_user)
         db.session.commit()
 
-        return jsonify({"message": "User created", "user": UserSchema().dump(user)}), 201
+        return jsonify({"message": "User registered successfully"}), 201
     except Exception as e:
         return handle_error(e)
 
+@api_bp.route('/login', methods=['POST'])
+def login():
+    try:
+        data = request.json
+
+        user = User.query.filter_by(name=data['name']).first()
+        if not user or not pbkdf2_sha256.verify(data['password'], user.password):
+            return jsonify({"message": "Invalid username or password"}), 401
+
+        access_token = create_access_token(identity=user.id)
+        return jsonify({"access_token": access_token}), 200
+    except Exception as e:
+        return handle_error(e)
+@api_bp.route('/protected', methods=['GET'])
+@jwt_required()
+def protected():
+    current_user = get_jwt_identity()
+    return jsonify(logged_in_as=current_user), 200
 @api_bp.route('/users', methods=['GET'])
+@jwt_required()
 def get_users():
     try:
         users = User.query.all()
@@ -32,6 +52,7 @@ def get_users():
         return handle_error(e)
 
 @api_bp.route('/category', methods=['POST'])
+@jwt_required()
 def create_category():
     try:
         data = request.json
@@ -48,6 +69,7 @@ def create_category():
         return handle_error(e)
 
 @api_bp.route('/record', methods=['POST'])
+@jwt_required()
 def create_record():
     try:
         data = request.json
@@ -64,6 +86,7 @@ def create_record():
         return handle_error(e)
 
 @api_bp.route('/records', methods=['GET'])
+@jwt_required()
 def get_records():
     try:
         user_id = request.args.get('user_id', type=int)
@@ -81,6 +104,7 @@ def get_records():
         return handle_error(e)
 
 @api_bp.route('/currency', methods=['POST'])
+@jwt_required()
 def create_currency():
     try:
         data = request.json
@@ -97,6 +121,7 @@ def create_currency():
         return handle_error(e)
 
 @api_bp.route('/currencies', methods=['GET'])
+@jwt_required()
 def get_currencies():
     try:
         currencies = Currency.query.all()
@@ -105,6 +130,7 @@ def get_currencies():
         return handle_error(e)
 
 @api_bp.route('/user/<int:user_id>/default_currency', methods=['PUT'])
+@jwt_required()
 def set_default_currency(user_id):
     try:
         data = request.json

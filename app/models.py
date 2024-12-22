@@ -1,14 +1,22 @@
 from app import db
+from passlib.hash import pbkdf2_sha256
 
 class User(db.Model):
     __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
+    name = db.Column(db.String(80), nullable=False, unique=True)
+    password = db.Column(db.String(200), nullable=False)
 
     records = db.relationship('Record', back_populates='user', lazy=True)
 
     def __repr__(self):
         return f"<User {self.name}>"
+
+    def set_password(self, raw_password):
+        self.password = pbkdf2_sha256.hash(raw_password)
+
+    def check_password(self, raw_password):
+        return pbkdf2_sha256.verify(raw_password, self.password)
 
 class Category(db.Model):
     __tablename__ = 'category'
